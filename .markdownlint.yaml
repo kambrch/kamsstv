@@ -1,0 +1,9 @@
+# markdownlint config — see https://github.com/DavidAnson/markdownlint
+default: true
+
+# Prose and tables in these docs run past 80 cols by design.
+MD013: false
+
+# Keep padded table pipes (| a | b |) for source readability; the rule would
+# otherwise demand compact, unpadded pipes.
+MD060: false
