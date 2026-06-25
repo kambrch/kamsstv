@@ -27,6 +27,7 @@ mod tests {
     use proptest::prelude::*;
     const FS: f32 = 48_000.0; // sample rate; MUST be the same value used in Nco::new and in the bound
     const EPS: f32 = 1e-6; // absorbs rounding errors
+    const TOL: f32 = 5e-3;
 
     // Schedule-generation bounds for the property test below.
     // SSTV video subcarrier band: 1500 Hz (black) .. 2300 Hz (white).
@@ -35,6 +36,7 @@ mod tests {
     const MAX_HOLD: usize = 64; // longest a single tone is held, in samples
     const MIN_SEGMENTS: usize = 2; // >= 2 guarantees at least one seam (tone change)
     const MAX_SEGMENTS: usize = 16;
+    const ACCURACY_SAMPLES: usize = 4096;
 
     #[test]
     #[allow(clippy::float_cmp)]
@@ -51,6 +53,22 @@ mod tests {
     /// Derivation: Notes/nco-invariant-testing.md.
     fn max_adjacent_step(f: f32, fs: f32) -> f32 {
         2.0 * (std::f32::consts::PI * f / fs).sin()
+    }
+    fn tone_energy_fraction(samples: &[f32], f: f32, fs: f32) -> f32 {
+        let n = samples.len();
+        let phi = 2.0 * std::f32::consts::PI * f / fs;
+
+        let energy: f32 = samples.iter().map(|s| s.powi(2)).sum();
+        let (c_re, c_im) =
+            samples
+                .iter()
+                .enumerate()
+                .fold((0.0_f32, 0.0_f32), |(re, im), (k, s)| {
+                    let angle = phi * k as f32;
+                    (re + s * angle.cos(), im + s * angle.sin())
+                });
+
+        (c_re * c_re + c_im * c_im) / energy / n as f32
     }
 
     proptest! {
@@ -82,6 +100,13 @@ mod tests {
             let bound = max_adjacent_step(f_max, FS);
             prop_assert!(f_max <= FS / 2.0);
             prop_assert!(max_diff <= bound + EPS, "max_diff {} exceeded bound {}", max_diff, bound);
+        }
+        #[test]
+        fn energy_concentrates_at_given_tone(f in TONE_LO..=TONE_HI){
+            let mut nco = Nco::new(FS);
+            let samples: Vec<f32> = (0..ACCURACY_SAMPLES).map(|_|nco.next_sample(f)).collect();
+            let frac = tone_energy_fraction(&samples, f, FS);
+            prop_assert!((frac-0.5).abs() < TOL, "frac {} off 0.5 at f={}", frac, f)
         }
     }
 }
