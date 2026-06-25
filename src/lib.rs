@@ -16,8 +16,7 @@ impl Nco {
         // Convention: ADVANCE-then-READ. phase moves first, then we read sin().
         // Consequence: sample 0 = sin(step*f), NOT sin(0)=0. A future
         // "starts at zero" test would need the two lines swapped (read-then-advance).
-        const TAU: f32 = std::f32::consts::PI * 2.0;
-        self.phase = (self.phase + self.step_scale * f).rem_euclid(TAU); // φ[k+1] = φ[k] + (2π/fs)·f  -- the accumulator IS the integral of frequency
+        self.phase = (self.phase + self.step_scale * f).rem_euclid(std::f32::consts::TAU); // φ[k+1] = φ[k] + (2π/fs)·f mod 2π
         self.phase.sin()
     }
 }
@@ -27,34 +26,62 @@ mod tests {
     use super::*; // pull in Nco from parent module
     use proptest::prelude::*;
     const FS: f32 = 48_000.0; // sample rate; MUST be the same value used in Nco::new and in the bound
-    const EPS: f32 = 1e-6; // absorbs rounding errors 
+    const EPS: f32 = 1e-6; // absorbs rounding errors
+
+    // Schedule-generation bounds for the property test below.
+    // SSTV video subcarrier band: 1500 Hz (black) .. 2300 Hz (white).
+    const TONE_LO: f32 = 1500.0;
+    const TONE_HI: f32 = 2300.0;
+    const MAX_HOLD: usize = 64; // longest a single tone is held, in samples
+    const MIN_SEGMENTS: usize = 2; // >= 2 guarantees at least one seam (tone change)
+    const MAX_SEGMENTS: usize = 16;
+
     #[test]
+    #[allow(clippy::float_cmp)]
     fn dc_input_yields_constant_output() {
         let mut nco = Nco::new(FS);
         let a = nco.next_sample(0.0);
         let b = nco.next_sample(0.0);
-        assert!(a == b);
+        assert!(a == b); // bit-identical sin(0.0)=0.0
+    }
+
+    /// Max possible |sample[k+1] - sample[k]| for a sine of frequency `f` at rate `fs`.
+    /// sin(φ+Δφ) - sin(φ) = 2·cos(φ+Δφ/2)·sin(Δφ/2); |cos| ≤ 1, Δφ = 2π·f/fs
+    /// => supremum = 2·sin(π·f/fs). Attainable, so callers compare with a tolerance.
+    /// Derivation: Notes/nco-invariant-testing.md.
+    fn max_adjacent_step(f: f32, fs: f32) -> f32 {
+        2.0 * (std::f32::consts::PI * f / fs).sin()
     }
 
     proptest! {
         #[test]
-        fn phase_continuity_bound(schedule in prop::collection::vec((1500.0f32..=2300.0, 1usize..=64), 2..=16)) {
+        fn phase_continuity_bound(
+            schedule in prop::collection::vec(
+                (TONE_LO..=TONE_HI, 1usize..=MAX_HOLD),
+                MIN_SEGMENTS..=MAX_SEGMENTS,
+            ),
+        ) {
+            // Synthesize the waveform through a SINGLE nco, so phase carries across
+            // tone changes -- that seam continuity is exactly what this test checks.
+            // (A fresh nco per segment would reset phase to 0 and destroy the property.)
             let mut nco = Nco::new(FS);
-            //let samples: Vec<f32> = schedule.iter().flat_map(|&(tone, hold)| (0..hold).map(move |_| nco.next_sample(tone))).collect();
             let mut samples = Vec::new();
             for &(tone, hold) in &schedule {
                 for _ in 0..hold {
                     samples.push(nco.next_sample(tone));
                 }
             }
-            // finds the maximum `tone` value from `schedule`
+            // max tone across the schedule. `|&(tone, _)|` derefs the &(f32, usize)
+            // from iter() and binds `tone` by value; `_` drops the hold. fold seeds at
+            // 0.0 (safe ONLY because tones are positive) and reduces with f32::max as a
+            // fn-value -- can't use Iterator::max(), f32 isn't Ord (NaN breaks ordering).
             let f_max = schedule.iter().map(|&(tone, _)| tone).fold(0.0f32, f32::max);
             let max_diff = samples.windows(2)
                 .map(|w| (w[0] - w[1]).abs())
                 .fold(0.0f32, f32::max);
-            let bound = 2.0 * (std::f32::consts::PI * f_max / FS).sin();
+            let bound = max_adjacent_step(f_max, FS);
             prop_assert!(f_max <= FS / 2.0);
             prop_assert!(max_diff <= bound + EPS, "max_diff {} exceeded bound {}", max_diff, bound);
-            }
+        }
     }
 }
