@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 7322e14cd44f5b4ead3b1f2832e2eb59ca6f35dfed1c5c3bf55c1071a3abe4e2 # shrinks to f = 1882.3077
+cc b0e1c4ac591945d2bcea83d5daa26a647f02c65cfc360f6e6b1dbbe54fb02bdd # shrinks to schedule = [(2262.6018, 32), (2185.6133, 49), (1978.2579, 64), (1500.0, 11), (1869.1942, 49), (2078.3176, 37), (2240.4055, 47), (2140.8506, 18), (1982.9213, 22), (2109.4546, 64), (2242.2954, 35), (1728.5759, 37), (2269.3127, 34)]

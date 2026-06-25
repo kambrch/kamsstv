@@ -16,7 +16,8 @@ impl Nco {
         // Convention: ADVANCE-then-READ. phase moves first, then we read sin().
         // Consequence: sample 0 = sin(step*f), NOT sin(0)=0. A future
         // "starts at zero" test would need the two lines swapped (read-then-advance).
-        self.phase += self.step_scale * f; // φ[k+1] = φ[k] + (2π/fs)·f  -- the accumulator IS the integral of frequency
+        const TAU: f32 = std::f32::consts::PI * 2.0;
+        self.phase = (self.phase + self.step_scale * f).rem_euclid(TAU); // φ[k+1] = φ[k] + (2π/fs)·f  -- the accumulator IS the integral of frequency
         self.phase.sin()
     }
 }
@@ -37,17 +38,22 @@ mod tests {
 
     proptest! {
         #[test]
-        // SINGLE-TONE for now: positive bound-coverage only
-        // To catch the bug, swap `f` for a randomized (tone, hold) schedule with seams.
-        fn phase_continuity_bound(f in 1500.0f32..=2300.0) {
+        fn phase_continuity_bound(schedule in prop::collection::vec((1500.0f32..=2300.0, 1usize..=64), 2..=16)) {
             let mut nco = Nco::new(FS);
-            // waveform: 100 samples at one constant tone -> NO seam (can't trip the bug yet)
-            let samples: Vec<f32> = (0..100).map(|_| nco.next_sample(f)).collect();
+            //let samples: Vec<f32> = schedule.iter().flat_map(|&(tone, hold)| (0..hold).map(move |_| nco.next_sample(tone))).collect();
+            let mut samples = Vec::new();
+            for &(tone, hold) in &schedule {
+                for _ in 0..hold {
+                    samples.push(nco.next_sample(tone));
+                }
+            }
+            // finds the maximum `tone` value from `schedule`
+            let f_max = schedule.iter().map(|&(tone, _)| tone).fold(0.0f32, f32::max);
             let max_diff = samples.windows(2)
                 .map(|w| (w[0] - w[1]).abs())
                 .fold(0.0f32, f32::max);
-
-            let bound = 2.0 * (std::f32::consts::PI * f / FS).sin();
+            let bound = 2.0 * (std::f32::consts::PI * f_max / FS).sin();
+            prop_assert!(f_max <= FS / 2.0);
             prop_assert!(max_diff <= bound + EPS, "max_diff {} exceeded bound {}", max_diff, bound);
             }
     }
