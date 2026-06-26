@@ -81,10 +81,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "kamsstv"
+name = "kamsstv-app"
+version = "0.1.0"
+dependencies = [
+ "kamsstv-core",
+ "kamsstv-io",
+]
+
+[[package]]
+name = "kamsstv-core"
 version = "0.1.0"
 dependencies = [
  "proptest",
+]
+
+[[package]]
+name = "kamsstv-io"
+version = "0.1.0"
+dependencies = [
+ "kamsstv-core",
 ]
 
 [[package]]

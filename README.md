@@ -7,6 +7,41 @@ Development of this software is primarly motivated by lack of cross-platform (ma
 
 Early.
 
+## Roadmap
+
+Mirrors the architecture in [docs/design.md](docs/design.md). Checked items are
+implemented and tested; the rest are planned.
+
+### Infrastructure
+
+- [x] Three-crate workspace (`core` / `io` / `app`), compiler-enforced core purity
+- [ ] File-loopback test harness (encode → WAV → decode → image-diff)
+
+### Transmit path
+
+- [x] NCO — phase-wrapped oscillator (property + mutation tested)
+- [ ] Timing/segment layer (Duration → samples, Bresenham fractional carry)
+- [ ] `ModeSpec` table (Martin M1, Robot 36)
+- [ ] Colour transform (RGB ↔ YCrCb)
+- [ ] Modulator (`Iterator<Item = f32>`)
+- [ ] WAV writer
+- [ ] PTT backends (`Noop`/`Vox` first; serial/rigctl/gpio later)
+
+### Receive path *(primary open risk — see design.md)*
+
+- [ ] AGC / normalise
+- [ ] IQ downconvert → instantaneous frequency
+- [ ] Sync detector + clamped slant (ε) estimator
+- [ ] Pixel sampler
+- [ ] Image assembler
+
+### Orchestration
+
+- [ ] `Conductor` state machine (pure, in `core`)
+- [ ] `ConductorDriver` (rings / threads / PTT, in `app`)
+- [ ] Audio I/O (`cpal`)
+- [ ] GUI
+
 ## Design
 
 kamsstv is built as ports-and-adapters around a pure, I/O-free core. Because

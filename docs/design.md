@@ -124,6 +124,8 @@ enum Conductor {
 
 The rings still exist independently; consumption is gated by the active variant, so "receiving while keyed" can't be constructed.
 
+The conductor is split across the crate boundary: this pure `enum` plus its legal transitions lives in the I/O-free `kamsstv-core` crate, while the *driver* that owns the rings, spawns threads, and calls `Ptt::key`/`unkey` lives in `kamsstv-app`. The invariant above is thus a property of pure `core` logic, testable with no rings, threads, or hardware. See [the code-structure spec](superpowers/specs/2026-06-26-workspace-structure-design.md).
+
 ---
 
 ## Testing

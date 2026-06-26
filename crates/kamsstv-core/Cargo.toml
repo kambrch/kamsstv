@@ -1,0 +1,10 @@
+[package]
+name = "kamsstv-core"
+version = "0.1.0"
+edition = "2024"
+
+# INVARIANT: no I/O / audio / channel dependencies here. The pure core's purity
+# is compiler-enforced by the absence of those crates from this manifest.
+
+[dev-dependencies]
+proptest = "1"

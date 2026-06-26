@@ -1,0 +1,8 @@
+[package]
+name = "kamsstv-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kamsstv-core = { path = "../kamsstv-core" }
+kamsstv-io = { path = "../kamsstv-io" }

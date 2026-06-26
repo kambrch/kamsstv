@@ -1,2 +1,15 @@
 /target
 /Notes/
+
+# cargo-mutants reports (test logs + mutant outcomes); rotated copy is *.old
+/mutants.out/
+/mutants.out.old/
+
+# coverage reports (tarpaulin, llvm-cov, grcov)
+/coverage/
+*.profraw
+*.profdata
+cobertura.xml
+tarpaulin-report.html
+tarpaulin-report.json
+lcov.info
