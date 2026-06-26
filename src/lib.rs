@@ -1,5 +1,9 @@
 // Numerically Controlled Oscillator
 // Nco is stateful (evolve phase from step to next step)
+
+use std::f32::consts::PI;
+
+// Note: f32 should be suffiecient for SSTV (worth testing later)
 pub struct Nco {
     phase: f32,      // φ[k] -- phase accumulator
     step_scale: f32, // 2π/fs -- precomputed phase scalar
@@ -7,16 +11,17 @@ pub struct Nco {
 
 impl Nco {
     pub fn new(fs: f32) -> Self {
+        debug_assert!(fs > 0.0);
         Nco {
-            phase: 0.0, // oscillation begins at sin(0)=0 (convention)
-            step_scale: 2.0 * std::f32::consts::PI / fs,
+            phase: 0.0, // we are free to choose φ[0]=0 (convention)
+            step_scale: 2.0 * PI / fs,
         }
     }
     pub fn next_sample(&mut self, f: f32) -> f32 {
         // Convention: ADVANCE-then-READ. phase moves first, then we read sin().
-        // Consequence: sample 0 = sin(step*f), NOT sin(0)=0. A future
-        // "starts at zero" test would need the two lines swapped (read-then-advance).
-        self.phase = (self.phase + self.step_scale * f).rem_euclid(std::f32::consts::TAU); // φ[k+1] = φ[k] + (2π/fs)·f mod 2π
+        // φ[k+1] = φ[k] + (2π/fs)·f mod 2π
+        // .rem_euclid() helps to avoid issues with modulo aithmetics in Rust
+        self.phase = (self.phase + self.step_scale * f).rem_euclid(2.0 * PI);
         self.phase.sin()
     }
 }
@@ -39,39 +44,43 @@ mod tests {
     const ACCURACY_SAMPLES: usize = 4096;
 
     #[test]
-    #[allow(clippy::float_cmp)]
-    fn dc_input_yields_constant_output() {
+    fn first_sample_reflects_advanced_phase() {
+        let f = 1500.0_f32;
         let mut nco = Nco::new(FS);
-        let a = nco.next_sample(0.0);
-        let b = nco.next_sample(0.0);
-        assert!(a == b); // bit-identical sin(0.0)=0.0
+        let first = nco.next_sample(f);
+        let expected = (2.0 * PI * f / FS).sin();
+        assert!((expected - first).abs() < EPS);
     }
 
-    /// Max possible |sample[k+1] - sample[k]| for a sine of frequency `f` at rate `fs`.
-    /// sin(φ+Δφ) - sin(φ) = 2·cos(φ+Δφ/2)·sin(Δφ/2); |cos| ≤ 1, Δφ = 2π·f/fs
-    /// => supremum = 2·sin(π·f/fs). Attainable, so callers compare with a tolerance.
-    /// Derivation: Notes/nco-invariant-testing.md.
+    // Max possible |sample[k+1] - sample[k]| for a sine of frequency `f` at rate `fs`.
+    // sin(φ+Δφ) - sin(φ) = 2·cos(φ+Δφ/2)·sin(Δφ/2); |cos| ≤ 1, Δφ = 2π·f/fs
+    // => supremum = 2·sin(π·f/fs). Attainable, so callers compare with a tolerance.
     fn max_adjacent_step(f: f32, fs: f32) -> f32 {
-        2.0 * (std::f32::consts::PI * f / fs).sin()
+        2.0 * (PI * f / fs).sin()
     }
     fn tone_energy_fraction(samples: &[f32], f: f32, fs: f32) -> f32 {
         let n = samples.len();
-        let phi = 2.0 * std::f32::consts::PI * f / fs;
+        let phi_step = 2.0 * PI * f / fs; // Δφ per sample
 
         let energy: f32 = samples.iter().map(|s| s.powi(2)).sum();
-        let (c_re, c_im) =
-            samples
-                .iter()
-                .enumerate()
-                .fold((0.0_f32, 0.0_f32), |(re, im), (k, s)| {
-                    let angle = phi * k as f32;
-                    (re + s * angle.cos(), im + s * angle.sin())
-                });
+        let (c_re, c_im, _) = samples
+            .iter()
+            .fold((0.0_f32, 0.0_f32, 0.0_f32), |(re, im, phase), s| {
+                (re + s * phase.cos(), im + s * phase.sin(), phase + phi_step)
+            });
 
-        (c_re * c_re + c_im * c_im) / energy / n as f32
+        (c_re * c_re + c_im * c_im) / energy / n as f32 // // → 0.5 for pure unit sine (Parseval)
     }
 
     proptest! {
+        #[test]
+        fn samples_stay_in_unit_range(f in TONE_LO..=TONE_HI) {
+            let mut nco = Nco::new(FS);
+            for _ in 0..ACCURACY_SAMPLES {
+            let s = nco.next_sample(f);
+            prop_assert!((-1.0..=1.0).contains(&s), "{} out of [-1, 1]", s);
+            }
+        }
         #[test]
         fn phase_continuity_bound(
             schedule in prop::collection::vec(
