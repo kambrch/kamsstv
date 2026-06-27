@@ -20,7 +20,7 @@ implemented and tested; the rest are planned.
 ### Transmit path
 
 - [x] NCO — phase-wrapped oscillator (property + mutation tested)
-- [ ] Timing/segment layer (Duration → samples, Bresenham fractional carry)
+- [x] Timing/segment layer (Duration → samples, Bresenham fractional carry)
 - [ ] `ModeSpec` table (Martin M1, Robot 36)
 - [ ] Colour transform (RGB ↔ YCrCb)
 - [ ] Modulator (`Iterator<Item = f32>`)
